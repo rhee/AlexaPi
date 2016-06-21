@@ -1,14 +1,13 @@
-# AlexaPi
- 
+# sam-alexa-pi
+
+based on [AlexaPi https://github.com/sammachin/AlexaPi], by Sam Machin
+
+I ( Sang-Hoon RHEE ) added following features:
+
+ * Modified to be activate on voice, instead of GPIO button
+ * Modified to play audio cue's and audio response from server using pygame module, instead of external mpg123
+
 ---
-## 18/04/2016 I am working on a v1.1 of this incorporating as many fixes and pull requests as possible, look for a new verison in the next week or so.
- 
-### Contributors
- 
-* Sam Machin
- 
----
- 
 This is the code needed to Turn a Raspberry Pi into a client for Amazon's Alexa service, I have developed this against the Pi 2 but I see no reason it shouldn't run on the other models. Feedback welcome.
 ---
  
