@@ -1,6 +1,6 @@
 # sam-alexa-pi
 
-based on [AlexaPi https://github.com/sammachin/AlexaPi], by Sam Machin
+based on [AlexaPi](https://github.com/sammachin/AlexaPi), by Sam Machin
 
 I ( Sang-Hoon RHEE ) added following features:
 
