@@ -76,8 +76,8 @@ def start2():
             try: os.rename(http_log,http_log_bak)
             except: pass
 
-            if os.path.exists('backup-log.sh'):
-                try: os.system('sh backup-log.sh')
+            if os.path.exists('etc/backup-log.sh'):
+                try: os.system('sh etc/backup-log.sh')
                 except: pass
 
             logging.info('finished alexa()')
