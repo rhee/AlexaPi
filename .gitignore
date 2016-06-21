@@ -60,6 +60,7 @@ target/
 creds.py
 creds.backup.py
 backup-log.sh
+make-links.sh
 
 # more temp
 .vscode/
