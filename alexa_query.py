@@ -191,6 +191,7 @@ def alexa_query(recording,response,http_log_fn):
                                 sys.stderr.write('%.1f: http: %s'%(time.time(),desc,)+'\n')
                             except:
                                 logging.exception("Exception")
+                                hlog.log('dump of part-json',payload=payload)
                         if part_header.find('Content-Type: audio/') > -1:
                             hlog.log('part-audio',length=len(part_body))
                             audio = part_body

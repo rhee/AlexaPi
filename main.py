@@ -50,7 +50,7 @@ def start2():
 
     while True:
 
-        play_music(sound_chime1,5000)
+        play_music(sound_chime1,2000)
 
         time.sleep(1.5)
 
@@ -60,14 +60,14 @@ def start2():
 
             logging.info('start alexa()')
 
-            play_music(sound_chime2,5000)
+            play_music(sound_chime2,1000)
 
             alexa_query(raw_recording, mp3_response, http_log)
 
             if os.path.exists(mp3_response):
                 play_music(mp3_response,60000)
             else:
-                play_music(sound_chime3,5000)
+                play_music(sound_chime3,2000)
 
             try: os.rename(raw_recording,raw_recording_bak)
             except: pass
@@ -82,7 +82,7 @@ def start2():
 
             logging.info('finished alexa()')
         else:
-            play_music(sound_chime3,5000)
+            play_music(sound_chime3,2000)
 
 if __name__ == "__main__":
 

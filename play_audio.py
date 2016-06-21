@@ -3,10 +3,10 @@ import os,sys,time
 import pygame
 
 EXTERNAL_MP3_PLAYER=None
-#EXTERNAL_MP3_PLAYER="mpg123 -q"
+#EXTERNAL_MP3_PLAYER="mpg123 -q -m -r 24000"
 
-#pygame.init()
-pygame.mixer.init(frequency=24000,size=-16,channels=4)
+#pygame.mixer.init(frequency=24000,size=-16,channels=1)
+pygame.mixer.init(frequency=24000,size=-16,channels=1,buffer=720)
 
 path = os.path.realpath(__file__).rstrip(os.path.basename(__file__))
 
@@ -53,11 +53,6 @@ def play_music(fn,timeout_millis=-1):
 
     def log(msg,*args):
         sys.stderr.write(('%.1f: '%(time.time(),))+(msg % args)+'\n')
-
-    # try workaround pausing soundcard problem --shr 2016-06-16
-    pygame.mixer.pause()
-    pygame.mixer.unpause()
-    time.sleep(0.25)
 
     if EXTERNAL_MP3_PLAYER:
         os.system('%s %s'%(EXTERNAL_MP3_PLAYER,fn))

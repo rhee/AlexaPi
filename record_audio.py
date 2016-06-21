@@ -26,8 +26,10 @@ THRESHOLD_MARGIN = 819  # 1638 ~ 32768 * 0.05, 819 ~ 32768 * 0.025
 
 CHANNELS = 1
 FORMAT = pyaudio.paInt16
-RATE = 16000
-REC_CHUNK_SIZE = 160     # 0.01s approx
+RATE = 24000
+REC_CHUNK_SIZE = 240     # 0.01s approx
+
+RATE_OUTPUT = 16000
 
 
 # class color:
@@ -115,7 +117,7 @@ def adjust_threshold(rec_blocks):
         if 0 == rec_blocks:
             print_vumeter(__current_rms_min,__current_rms_max,__current_threshold)
         else:
-            sys.stderr.write('%.1f: [[recording: %5.1f]]' % ( t_now, rec_blocks/100.0, ) + '\r')
+            sys.stderr.write('%.1f: recording: %5.1f' % ( t_now, rec_blocks/100.0, ) + '\r')
         __display_time = t_now
         __current_rms_max = __current_rms_min = __current_rms
         __display_dirty = True
@@ -262,7 +264,7 @@ def record_to_file(path):
         return
 
     blocks = len(data) / 2 / 100
-    dur = len(data) / 2.0 / 16000.0
+    dur = len(data) / 2.0 / RATE
 
     if blocks < MIN_DURATION: # too short
         #sys.stderr.write('%.1f: [[record: skip short/cancelled data]]'%(time.time(),)+'\n')
@@ -274,9 +276,14 @@ def record_to_file(path):
         sys.stderr.write('%.1f: *** skip too long recording (%.1f)'%(time.time(),dur)+'\n')
         return
 
-    sys.stderr.write('%.1f: recorded %.1f'%(time.time(),dur)+'\n')
+    sys.stderr.write('%.1f: recorded: %.1f'%(time.time(),dur)+'\n')
 
+    # pack as byte array
     data = pack('<' + ('h'*len(data)), *data)
+
+    # sample rate convert 24000 -> 16000
+    data,_ = audioop.ratecv(data,2,CHANNELS,RATE,RATE_OUTPUT,None)
+
     f = open(path,'wb')
     f.write(data)
     f.close()
