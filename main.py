@@ -1,151 +1,100 @@
 #! /usr/bin/env python
+import os,sys,time,logging
 
-import os
-import random
-import time
-import RPi.GPIO as GPIO
-import alsaaudio
-import wave
-import random
-from creds import *
-import requests
-import json
-import re
-from memcache import Client
+import play_audio
+import record_audio
+import alexa_query
 
-#Settings
-button = 18 #GPIO Pin with button connected
-lights = [24, 25] # GPIO Pins with LED's conneted
-device = "plughw:1" # Name of your microphone/soundcard in arecord -L
+from play_audio import play_music
+from record_audio import record_to_file
+from alexa_query import internet_on,alexa_query
 
-#Setup
-recorded = False
-servers = ["127.0.0.1:11211"]
-mc = Client(servers, debug=1)
 path = os.path.realpath(__file__).rstrip(os.path.basename(__file__))
 
+sound_chime1 = os.path.join(path,'sounds/chime1.mp3') # listening
+sound_chime2 = os.path.join(path,'sounds/chime2.mp3') # querying
+sound_chime3 = os.path.join(path,'sounds/chime3.mp3') # something wrong
 
+ramdir = '/dev/shm/alexa-pi'
+try: os.makedirs(os.path.join(ramdir,'bak'))
+except: pass
 
-def internet_on():
-    print "Checking Internet Connection"
-    try:
-        r =requests.get('https://api.amazon.com/auth/o2/token')
-	print "Connection OK"
-        return True
-    except:
-	print "Connection Failed"
-    	return False
-
-	
-def gettoken():
-	token = mc.get("access_token")
-	refresh = refresh_token
-	if token:
-		return token
-	elif refresh:
-		payload = {"client_id" : Client_ID, "client_secret" : Client_Secret, "refresh_token" : refresh, "grant_type" : "refresh_token", }
-		url = "https://api.amazon.com/auth/o2/token"
-		r = requests.post(url, data = payload)
-		resp = json.loads(r.text)
-		mc.set("access_token", resp['access_token'], 3570)
-		return resp['access_token']
-	else:
-		return False
-		
-
-def alexa():
-	GPIO.output(lights[0], GPIO.HIGH)
-	url = 'https://access-alexa-na.amazon.com/v1/avs/speechrecognizer/recognize'
-	headers = {'Authorization' : 'Bearer %s' % gettoken()}
-	d = {
-   		"messageHeader": {
-       		"deviceContext": [
-           		{
-               		"name": "playbackState",
-               		"namespace": "AudioPlayer",
-               		"payload": {
-                   		"streamId": "",
-        			   	"offsetInMilliseconds": "0",
-                   		"playerActivity": "IDLE"
-               		}
-           		}
-       		]
-		},
-   		"messageBody": {
-       		"profile": "alexa-close-talk",
-       		"locale": "en-us",
-       		"format": "audio/L16; rate=16000; channels=1"
-   		}
-	}
-	with open(path+'recording.wav') as inf:
-		files = [
-				('file', ('request', json.dumps(d), 'application/json; charset=UTF-8')),
-				('file', ('audio', inf, 'audio/L16; rate=16000; channels=1'))
-				]	
-		r = requests.post(url, headers=headers, files=files)
-	if r.status_code == 200:
-		for v in r.headers['content-type'].split(";"):
-			if re.match('.*boundary.*', v):
-				boundary =  v.split("=")[1]
-		data = r.content.split(boundary)
-		for d in data:
-			if (len(d) >= 1024):
-				audio = d.split('\r\n\r\n')[1].rstrip('--')
-		with open(path+"response.mp3", 'wb') as f:
-			f.write(audio)
-		GPIO.output(lights[1], GPIO.LOW)
-
-		os.system('mpg123 -q {}1sec.mp3 {}response.mp3 {}1sec.mp3'.format(path, path, path))
-		GPIO.output(lights[0], GPIO.LOW)
-	else:
-		GPIO.output(lights[1], GPIO.LOW)
-		for x in range(0, 3):
-			time.sleep(.2)
-			GPIO.output(lights[1], GPIO.HIGH)
-			time.sleep(.2)
-			GPIO.output(lights[1], GPIO.LOW)
-		
+raw_recording = os.path.join(ramdir,'recording.raw')
+raw_recording_bak = os.path.join(ramdir,'bak/recording.raw')
+mp3_response = os.path.join(ramdir,'response.mp3')
+mp3_response_bak = os.path.join(ramdir,'bak/response.mp3')
+http_log = os.path.join(ramdir,'http.log')
+http_log_bak = os.path.join(ramdir,'bak/http.log')
 
 
 
-def start():
-	last = GPIO.input(button)
-	while True:
-		val = GPIO.input(button)
-		GPIO.wait_for_edge(button, GPIO.FALLING) # we wait for the button to be pressed
-		GPIO.output(lights[1], GPIO.HIGH)
-		inp = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, device)
-		inp.setchannels(1)
-		inp.setrate(16000)
-		inp.setformat(alsaaudio.PCM_FORMAT_S16_LE)
-		inp.setperiodsize(500)
-		audio = ""
-		while(GPIO.input(button)==0): # we keep recording while the button is pressed
-			l, data = inp.read()
-			if l:
-				audio += data
-		rf = open(path+'recording.wav', 'w')
-		rf.write(audio)
-		rf.close()
-		inp = None
-		alexa()
 
-	
+# handle alsa-lib error log things
+from ctypes import CFUNCTYPE,cdll,c_char_p, c_int
+ERROR_HANDLER_FUNC = CFUNCTYPE(None, c_char_p, c_int, c_char_p, c_int, c_char_p)
+def py_error_handler(filename, line, function, err, fmt): pass #print 'messages are yummy'
+c_error_handler = ERROR_HANDLER_FUNC(py_error_handler)
+asound = cdll.LoadLibrary('libasound.so')
+asound.snd_lib_error_set_handler(c_error_handler)
+
+
+
+
+def mute(): os.system('amixer -q set Master mute')
+def unmute(): os.system('amixer -q set Master unmute 45%; amixer -q set Front unmute; amixer -q set Headphone unmute')
+
+
+
+
+def start2():
+
+    while True:
+
+        play_music(sound_chime1,5000)
+
+        time.sleep(1.5)
+
+        record_to_file(raw_recording)
+
+        if os.path.exists(raw_recording):
+
+            logging.info('start alexa()')
+
+            play_music(sound_chime2,5000)
+
+            alexa_query(raw_recording, mp3_response, http_log)
+
+            if os.path.exists(mp3_response):
+                play_music(mp3_response,60000)
+            else:
+                play_music(sound_chime3,5000)
+
+            try: os.rename(raw_recording,raw_recording_bak)
+            except: pass
+            try: os.rename(mp3_response,mp3_response_bak)
+            except: pass
+            try: os.rename(http_log,http_log_bak)
+            except: pass
+
+            if os.path.exists('backup-log.sh'):
+                try: os.system('sh backup-log.sh')
+                except: pass
+
+            logging.info('finished alexa()')
+        else:
+            play_music(sound_chime3,5000)
 
 if __name__ == "__main__":
-	GPIO.setwarnings(False)
-	GPIO.cleanup()
-	GPIO.setmode(GPIO.BCM)
-	GPIO.setup(button, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-	GPIO.setup(lights, GPIO.OUT)
-	GPIO.output(lights, GPIO.LOW)
-	while internet_on() == False:
-		print "."
-	token = gettoken()
-	os.system('mpg123 -q {}1sec.mp3 {}hello.mp3'.format(path, path))
-	for x in range(0, 3):
-		time.sleep(.1)
-		GPIO.output(lights[0], GPIO.HIGH)
-		time.sleep(.1)
-		GPIO.output(lights[0], GPIO.LOW)
-	start()
+
+    while internet_on() == False:
+        sys.stderr.write('.')
+
+    start2()
+
+# Emacs:
+# mode: javascript
+# c-basic-offset: 4
+# tab-width: 8
+# indent-tabs-mode: nil
+# End:
+# vim: se ft=javascript st=4 ts=8 sts=4

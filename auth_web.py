@@ -1,7 +1,8 @@
 #! /usr/bin/env python
 
-import cherrypy
 import os
+
+import cherrypy
 from cherrypy.process import servers
 import requests
 import json
@@ -32,9 +33,9 @@ class Start(object):
 		url = "https://api.amazon.com/auth/o2/token"
 		r = requests.post(url, data = payload)
 		resp = r.json()
-		line = 'refresh_token = "{}"'.format(resp['refresh_token'])
+		line = refresh_token = '{}'.format(resp['refresh_token'])
 		with open("creds.py", 'a') as f:
-			f.write(line)
+			f.write('refresh_token = "%s"\n' % line)
 		return "Success!, refresh token has been added to your creds file, you may now reboot the Pi <br>{}".format(resp['refresh_token'])
 	index.exposed = True
 	code.exposed = True

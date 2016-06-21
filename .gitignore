@@ -55,3 +55,10 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# secret
+creds.py
+creds.backup.py
+backup-log.sh
+
+.vscode/
