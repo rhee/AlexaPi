@@ -37,9 +37,9 @@
 # outfile: chime1.wav
 # effects: synth...
 
-sox -v 0.15 -n -c1 -b16 -r24000 chime1.wav synth 0.230 sin 1180.7 pad 0.75 0.005@0.115 0.115 vol 0.15
-sox -v 0.15 -n -c1 -b16 -r24000 chime2.wav synth 0.230 sin 830.61 pad 0.75 0.005@0.115 0.115 vol 0.15
-sox -v 0.15 -n -c1 -b16 -r24000 chime3.wav synth 0.375 sin 440.0 pad 0.75 0.25@0.125 0.25@0.250 vol 0.15
+sox -v 0.15 -n -c2 -b16 -r24000 chime1.wav synth 0.230 sin 1180.7 pad 0.25 0.005@0.115 vol 0.15
+sox -v 0.15 -n -c2 -b16 -r24000 chime2.wav synth 0.230 sin 830.61 pad 0.25 0.005@0.115 vol 0.15
+sox -v 0.15 -n -c2 -b16 -r24000 chime3.wav synth 0.375 sin 440.0 pad 0.25 0.25@0.125 0.25@0.250 vol 0.15
 
 lame chime1.wav chime1.mp3
 lame chime2.wav chime2.mp3
