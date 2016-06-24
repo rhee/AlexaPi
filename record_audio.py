@@ -9,27 +9,31 @@ from sys import byteorder
 from array import array
 from struct import pack
 
+import numpy as np
+
+#from vad import VAD
 
 
 
-ABOVE_DURATION = 20      # 0.2s
-BELOW_DURATION = 150     # 1.5s
 
-MIN_DURATION = 150       # 1.5s
-MAX_DURATION = 950       # 9.5s
+CHANNELS = 1
+FORMAT = pyaudio.paInt16
+RATE = 24000
+RATE_OUTPUT = 16000
+
+CHUNK_SAMPLES = 240     # 0.01s approx
+
+ABOVE_CHUNKS = 20      # 0.2s
+BELOW_CHUNKS = 150     # 1.5s
+
+MIN_CHUNKS = 150       # 1.5s
+MAX_CHUNKS = 950       # 9.5s
 
 
 NORMALIZE_LEVEL = 16384  # 50% of max amp
 THRESHOLD_INITIAL_BASE = 0
 THRESHOLD_MARGIN = 819  # 1638 ~ 32768 * 0.05, 819 ~ 32768 * 0.025
 
-
-CHANNELS = 1
-FORMAT = pyaudio.paInt16
-RATE = 24000
-REC_CHUNK_SIZE = 240     # 0.01s approx
-
-RATE_OUTPUT = 16000
 
 
 # class color:
@@ -56,19 +60,7 @@ range3  = '\033[1;37;43m'
 nocolor = '\033[0m'
 
 
-__current_rms = THRESHOLD_INITIAL_BASE
-__current_rms_max = __current_rms_min = __current_rms
-__current_threshold = __current_rms + THRESHOLD_MARGIN
-__display_time = time.time()
-__display_dirty = False
 
-def is_silent(snd_data):
-    "Returns 'True' if below the 'silent' threshold"
-
-    global __current_rms
-
-    __current_rms = current = audioop.rms(snd_data,2)
-    return current < __current_threshold
 
 def print_vumeter(fmin,fmax,fthr):
     pscl = 2.5
@@ -96,6 +88,14 @@ def print_vumeter(fmin,fmax,fthr):
     sys.stderr.write('[ %s ] %6d %6d' % ( s, fmin, fthr, ) + '\r')
 
 
+
+
+__current_rms = THRESHOLD_INITIAL_BASE
+__current_rms_max = __current_rms_min = __current_rms
+__current_threshold = __current_rms + THRESHOLD_MARGIN
+__display_time = time.time()
+__display_dirty = False
+
 # run for each chunk, ( 1/100s )
 def adjust_threshold(rec_blocks):
     "update threshold"
@@ -117,27 +117,48 @@ def adjust_threshold(rec_blocks):
         if 0 == rec_blocks:
             print_vumeter(__current_rms_min,__current_rms_max,__current_threshold)
         else:
-            sys.stderr.write('%.1f: recording: %5.1f' % ( t_now, rec_blocks/100.0, ) + '\r')
+            sys.stderr.write('%.1f: recording: %5.1f %5.1f' % ( t_now, min(0,rec_blocks/1000.0-1.0), rec_blocks/100.0, ) + '\r')
         __display_time = t_now
         __current_rms_max = __current_rms_min = __current_rms
         __display_dirty = True
 
-def normalize(snd_data):
+
+
+#_detector = VAD(fs=24000)
+
+
+def is_silent(snd_blocks,snd_chunk):
+    "Returns 'True' if below the 'silent' threshold"
+
+    global __current_rms
+
+    __current_rms = current = audioop.rms(snd_chunk,2)
+    #v = _detector.activations(np.array(snd_chunk))
+    #sys.stderr.write('%.1f: vad activations: %.1f'%(time.time(),v,)+'\n')
+
+    res = current < __current_threshold
+
+    adjust_threshold(snd_blocks)
+
+    return res
+
+
+def normalize(snd_chunk):
     "Average the volume out"
-    times = float(NORMALIZE_LEVEL)/max(abs(i) for i in snd_data)
+    times = float(NORMALIZE_LEVEL)/max(abs(i) for i in snd_chunk)
     r = array('h')
-    for i in snd_data:
+    for i in snd_chunk:
         r.append(int(i*times))
     return r
 
-def trim(snd_data):
+def trim(snd_chunk):
     "Trim the blank spots at the start and end"
 
-    def _trim(snd_data):
+    def _trim(snd_chunk):
         snd_started = False
         r = array('h')
 
-        for i in snd_data:
+        for i in snd_chunk:
             if not snd_started and abs(i)>__current_threshold:
                 snd_started = True
                 r.append(i)
@@ -147,18 +168,18 @@ def trim(snd_data):
         return r
 
     # Trim to the left
-    snd_data = _trim(snd_data)
+    snd_chunk = _trim(snd_chunk)
 
     # Trim to the right
-    snd_data.reverse()
-    snd_data = _trim(snd_data)
-    snd_data.reverse()
-    return snd_data
+    snd_chunk.reverse()
+    snd_chunk = _trim(snd_chunk)
+    snd_chunk.reverse()
+    return snd_chunk
 
-def add_silence(snd_data, seconds):
-    "Add silence to the start and end of 'snd_data' of length 'seconds' (float)"
+def add_silence(snd_chunk, seconds):
+    "Add silence to the start and end of 'snd_chunk' of length 'seconds' (float)"
     r = array('h', [0 for i in xrange(int(seconds*RATE))])
-    r.extend(snd_data)
+    r.extend(snd_chunk)
     r.extend([0 for i in xrange(int(seconds*RATE))])
     return r
 
@@ -181,7 +202,7 @@ def record():
     p = pyaudio.PyAudio()
     stream = p.open(format=FORMAT, channels=CHANNELS, rate=RATE,
                     input=True, output=True,
-                    frames_per_buffer=REC_CHUNK_SIZE)
+                    frames_per_buffer=CHUNK_SAMPLES)
 
     t_now = time.time()
     #sys.stderr.write('%.1f: [[record:listening...]]'%(t_now,)+'\n')
@@ -191,56 +212,72 @@ def record():
     snd_blocks = 0
 
     r = array('h')
+    snd_frame = array('h') # frame_data.extend(snd_data) = frame to analyze ( 2 * CHUNK_SAMPLES samples )
 
     while 1:
 
         t_now = time.time()
 
         # little endian, signed short
-        snd_data = array('h', stream.read(REC_CHUNK_SIZE))
+        snd_chunk = array('h', stream.read(CHUNK_SAMPLES))
 
         if byteorder == 'big':
-            snd_data.byteswap()
+            snd_chunk.byteswap()
 
-        r.extend(snd_data)
+        r.extend(snd_chunk)
 
-        silent = is_silent(snd_data)
+        if ( len(snd_frame) == 0 ):
+            pass
+        else:
+            snd_frame.extend(snd_chunk)
 
-        if 0 == snd_blocks: # check recording start condition
+            silent = is_silent(snd_blocks,snd_frame)
 
-            if silent:
-                num_noisy = 0
-                r = array('h') # truncate buffer
-            else:
-                num_noisy += 1
-                if num_noisy >= ABOVE_DURATION:
+            if 0 == snd_blocks: # check recording start condition
+
+                if silent:
+                    num_noisy = 0
+                    r = array('h') # truncate buffer
+                else:
+                    num_noisy += 1
+                    if num_noisy >= ABOVE_CHUNKS:
+                        if __display_dirty: sys.stderr.write('\n')
+                        __display_dirty = False
+                        #sys.stderr.write('%.1f: [[record:started]]'%(t_now,)+'\n')
+                        snd_blocks = 1
+
+            else: # check recording stop condition
+
+                snd_blocks += 1
+
+                if snd_blocks > MAX_CHUNKS + BELOW_CHUNKS: # ignore if the sample longer than 9.5s
                     if __display_dirty: sys.stderr.write('\n')
                     __display_dirty = False
-                    #sys.stderr.write('%.1f: [[record:started]]'%(t_now,)+'\n')
-                    snd_blocks = 1
-
-        else: # check recording stop condition
-
-            snd_blocks += 1
-
-            if snd_blocks > MAX_DURATION: # ignore if the sample longer than 9.5s
-                if __display_dirty: sys.stderr.write('\n')
-                __display_dirty = False
-                #sys.stderr.write('%.1f: [[record:cancelled]]'%(t_now,)+'\n')
-                r = array('h') # clear
-                break
-
-            if silent:
-                num_silent += 1
-                if num_silent >= BELOW_DURATION:
-                    if __display_dirty: sys.stderr.write('\n')
-                    __display_dirty = False
-                    #sys.stderr.write('%.1f: [[record:finished]]'%(t_now,)+'\n')
+                    #sys.stderr.write('%.1f: [[record:cancelled]]'%(t_now,)+'\n')
+                    dur = ( snd_blocks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
+                    sys.stderr.write('%.1f: *** skip too long recording (%.1f)'%(time.time(),dur)+'\n')
+                    r = array('h') # clear
                     break
-            else:
-                num_silent = 0
 
-        adjust_threshold(snd_blocks)
+                if silent:
+                    num_silent += 1
+                    if num_silent >= BELOW_CHUNKS:
+                        if __display_dirty: sys.stderr.write('\n')
+                        __display_dirty = False
+                        #sys.stderr.write('%.1f: [[record:finished]]'%(t_now,)+'\n')
+
+                        if snd_blocks < MIN_CHUNKS: # too short
+                            dur = ( snd_blocks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
+                            sys.stderr.write('%.1f: *** skip too short recording (%.1f)'%(time.time(),dur)+'\n')
+                            r = array('h') # clear
+
+                        break
+                else:
+                    num_silent = 0
+
+        # prefare snd_frame for next iteration
+        snd_frame = array('h')
+        snd_frame.extend(snd_chunk)
 
     stream.stop_stream()
     stream.close()
@@ -259,24 +296,9 @@ def record_to_file(path):
     "Records from the microphone and outputs the resulting data to 'path'"
     data = record()
 
-    if data is None or len(data) == 0:
-        sys.stderr.write('%.1f: *** no recording (%.1f)'%(time.time(),0.0)+'\n')
+    # recording cancelled?
+    if len(data) == 0:
         return
-
-    blocks = len(data) / 2 / 100
-    dur = len(data) / 2.0 / RATE
-
-    if blocks < MIN_DURATION: # too short
-        #sys.stderr.write('%.1f: [[record: skip short/cancelled data]]'%(time.time(),)+'\n')
-        sys.stderr.write('%.1f: *** skip too short recording (%.1f)'%(time.time(),dur)+'\n')
-        return
-
-    if blocks > MAX_DURATION: # too long
-        #sys.stderr.write('%.1f: [[record: skip data too long]]'%(time.time(),)+'\n')
-        sys.stderr.write('%.1f: *** skip too long recording (%.1f)'%(time.time(),dur)+'\n')
-        return
-
-    sys.stderr.write('%.1f: recorded: %.1f'%(time.time(),dur)+'\n')
 
     # pack as byte array
     data = pack('<' + ('h'*len(data)), *data)

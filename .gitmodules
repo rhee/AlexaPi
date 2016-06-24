@@ -1,0 +1,3 @@
+[submodule "vad"]
+	path = vad
+	url = https://github.com/mwv/vad.git
