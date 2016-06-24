@@ -1,0 +1,14 @@
+apps:
+  - script : main.py
+    instances : 1
+    watch :
+      - app.yml
+      - alexa_query.py
+      - auth_web.py
+      - creds.py
+      - example_creds.py
+      - main.py
+      - play_audio.py
+      - record_audio.py
+    env : development
+    env_production : production
