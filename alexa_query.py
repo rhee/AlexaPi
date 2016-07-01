@@ -2,6 +2,7 @@
 import sys,time,logging
 
 import requests
+from requests_toolbelt.multipart import decoder
 import json
 import yaml
 import re
@@ -10,6 +11,34 @@ import uuid
 import pprint
 
 from creds import *
+
+
+class httplog:
+
+    _log_file = None
+
+    def start(self,log_fn):
+        self._log_file = open(log_fn,'wb')
+
+    def stop(self,):
+        self._log_file.close()
+        self._log_file = None
+
+    def log(self,title,**kwargs):
+        if self._log_file:
+            log = self._log_file
+        else:
+            log = sys.stderr
+        log.write('%.1f: [[%s]]'%(time.time(),title,)+'\n')
+        if kwargs:
+            try:
+                yaml.safe_dump(kwargs,log,default_flow_style=False)
+            except:
+                log.write('=')
+                pprint.pprint(kwargs,log)
+
+hlog = httplog()
+
 
 
 #from memcache import Client
@@ -46,31 +75,6 @@ class fakemc:
 
 
 mc = fakemc()
-
-
-class httplog:
-
-    _log_file = None
-
-    def start(self,log_fn):
-        self._log_file = open(log_fn,'wb')
-
-    def stop(self,):
-        self._log_file.close()
-        self._log_file = None
-
-    def log(self,title,**kwargs):
-        if self._log_file:
-            log = self._log_file
-        else:
-            log = sys.stderr
-        log.write('%.1f: [[%s]]'%(time.time(),title,)+'\n')
-        if kwargs:
-            yaml.safe_dump(kwargs,log,default_flow_style=False)
-
-
-hlog = httplog()
-
 
 
 def gettoken():
@@ -154,51 +158,43 @@ def alexa_query(recording,response,http_log_fn):
                 ('file', ('audio', inf, 'audio/L16; rate=16000; channels=1'))
                 ]
 
-        t_now = time.time()
         hlog.log('alexa_query:request',url=url,headers=headers,request=d)
 
         r = requests.post(url, headers=headers, files=files)
 
-        t_now = time.time()
-        hlog.log('alexa_query:response',status=r.status_code)
+        hlog.log('alexa_query:response:status',status=r.status_code)
 
         sys.stderr.write('%.1f: http: status: %d'%(time.time(),r.status_code,)+'\n')
 
         if r.status_code == 200:
 
-            #hlog.log('alexa:response',headers=r.headers)
-            pprint.pprint('%.1f: [[alexa:response]]'%(time.time(),),hlog._log_file)
-            pprint.pprint(r.headers,hlog._log_file)
+            ### CaseInsensitiveDict 를 yaml.safe_dump 할 수 없어서
+            ### .items() 를 가지고 새로 dict() 만든다
+            hlog.log('alexa_query:response:headers',headers=dict(r.headers.items()))
 
-            for v in r.headers['content-type'].split(";"):
-                if re.match('.*boundary.*', v):
-                    boundary =  v.split("=")[1]
-            data = r.content.split(boundary)
-            for d in data:
-                if len(d) > 2:
-                    part = d.split('\r\n\r\n') # '' for first split, '--' for last split
-                    if len(part) >= 2:
-                        part_header = part[0][2:]
-                        hlog.log('part-header',headers=part_header[:min(len(part_header),200)])
-                        part_body = part[1].rstrip('--')
-                        # Content-Type: application/json
-                        # Content-Type: audio/mpeg
-                        if part_header.find('Content-Type: application/json') > -1:
-                            payload = json.loads(part_body)
-                            hlog.log('part-json',length=len(part_body),payload=payload)
-                            try:
-                                desc=payload['messageBody']['directives'][0]['payload']['audioContent']
-                                sys.stderr.write('%.1f: http: %s'%(time.time(),desc,)+'\n')
-                            except:
-                                logging.exception("Exception")
-                                hlog.log('dump of part-json',payload=payload)
-                        if part_header.find('Content-Type: audio/') > -1:
-                            hlog.log('part-audio',length=len(part_body))
-                            audio = part_body
-                            try:
-                                with open(response, 'wb') as f: f.write(audio)
-                            except:
-                                logging.exception("Exception")
+            multipart_data = decoder.MultipartDecoder.from_response(r)
+
+            for part in multipart_data.parts:
+                hlog.log('part-header',headers=dict(part.headers.items()))
+                # Content-Type: application/json
+                # Content-Type: audio/mpeg
+                if part.headers['content-type'] == 'application/json':
+                    payload = json.loads(part.content)
+                    hlog.log('part-json',length=len(part.content),payload=payload)
+                    try:
+                        desc=payload['messageBody']['directives'][0]['payload']['audioContent']
+                        sys.stderr.write('%.1f: http: %s'%(time.time(),desc,)+'\n')
+                    except:
+                        logging.exception("Exception")
+                        hlog.log('dump of part-json',payload=payload)
+                if part.headers['content-type'].startswith('audio/'):
+                    hlog.log('part-audio',length=len(part.content))
+                    audio = part.content
+                    try:
+                        with open(response, 'wb') as f: f.write(audio)
+                    except:
+                        logging.exception("Exception")
+
         else:
             pprint.pprint(r,hlog._log_file)
 
