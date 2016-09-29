@@ -183,7 +183,7 @@ def add_silence(snd_chunk, seconds):
     r.extend([0 for i in xrange(int(seconds*RATE))])
     return r
 
-def record():
+def record(wait):
     """
     Record a word or words from the microphone and
     return the data as an array of signed shorts.
@@ -235,7 +235,7 @@ def record():
 
             if 0 == snd_blocks: # check recording start condition
 
-                if silent:
+                if wait and silent:
                     num_noisy = 0
                     r = array('h') # truncate buffer
                 else:
@@ -292,9 +292,9 @@ def record():
 
     return r
 
-def record_to_file(path):
+def record_to_file(path, wait=True):
     "Records from the microphone and outputs the resulting data to 'path'"
-    data = record()
+    data = record(wait)
 
     # recording cancelled?
     if len(data) == 0:

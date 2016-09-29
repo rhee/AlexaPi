@@ -1,9 +1,25 @@
 #! /usr/bin/env python
 import os,sys,time,logging
 
-import play_audio
-import record_audio
-import alexa_query
+import signal
+from snowboy import snowboydecoder
+
+interrupted = False
+
+def signal_handler(signal, frame):
+    global interrupted
+    interrupted = True
+
+def interrupt_callback():
+    global interrupted
+    return interrupted
+
+# capture SIGINT signal, e.g., Ctrl+C
+signal.signal(signal.SIGINT, signal_handler)
+
+#import play_audio
+#import record_audio
+#import alexa_query
 
 from play_audio import play_music
 from record_audio import record_to_file
@@ -44,52 +60,66 @@ def mute(): os.system('amixer -q set Master mute')
 def unmute(): os.system('amixer -q set Master unmute 45%; amixer -q set Front unmute; amixer -q set Headphone unmute')
 
 
+def handle():
+    if os.path.exists(raw_recording):
 
+        logging.info('start alexa()')
 
-def start2():
+        play_music(sound_chime2,1000)
 
-    while True:
+        alexa_query(raw_recording, mp3_response, http_log)
 
-        play_music(sound_chime1,2000)
-
-        time.sleep(1.5)
-
-        record_to_file(raw_recording)
-
-        if os.path.exists(raw_recording):
-
-            logging.info('start alexa()')
-
-            play_music(sound_chime2,1000)
-
-            alexa_query(raw_recording, mp3_response, http_log)
-
-            if os.path.exists(mp3_response):
-                play_music(mp3_response,60000)
-            else:
-                play_music(sound_chime3,2000)
-
-            try: os.rename(raw_recording,raw_recording_bak)
-            except: pass
-            try: os.rename(mp3_response,mp3_response_bak)
-            except: pass
-            try: os.rename(http_log,http_log_bak)
-            except: pass
-
-            if os.path.exists('etc/backup-log.sh'):
-                try: os.system('sh etc/backup-log.sh')
-                except: pass
-
-            logging.info('finished alexa()')
+        if os.path.exists(mp3_response):
+            play_music(mp3_response,60000)
         else:
             play_music(sound_chime3,2000)
+
+        try: os.rename(raw_recording,raw_recording_bak)
+        except: pass
+        try: os.rename(mp3_response,mp3_response_bak)
+        except: pass
+        try: os.rename(http_log,http_log_bak)
+        except: pass
+
+        if os.path.exists('etc/backup-log.sh'):
+            try: os.system('sh etc/backup-log.sh')
+            except: pass
+
+        logging.info('finished alexa()')
+    else:
+        play_music(sound_chime3,2000)
+
+def start2():
+    while True:
+        play_music(sound_chime1,2000)
+        time.sleep(1.5)
+        record_to_file(raw_recording)
+        handle()
+
+def handle_snowboy():
+    record_to_file(raw_recording, wait=False)
+    handle()
+    print('Snowboy Listening... Press Ctrl+C to exit')
+
 
 if __name__ == "__main__":
 
     while internet_on() == False:
         sys.stderr.write('.')
 
-    start2()
+    #start2()
+
+    model = 'pmdl/Alexa.pmdl'
+    detector = snowboydecoder.HotwordDetector(model, sensitivity=0.5)
+    print('Snowboy Listening... Press Ctrl+C to exit')
+
+    # main loop
+    detector.start(detected_callback=handle_snowboy, #snowboydecoder.play_audio_file,
+                   interrupt_check=interrupt_callback,
+                   sleep_time=0.03)
+
+    detector.terminate()
+
 
 # Emacs:
 # mode: javascript
