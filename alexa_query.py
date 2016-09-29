@@ -128,6 +128,8 @@ def alexa_query(recording,response,http_log_fn):
 
     hlog.start(http_log_fn)
 
+    directives = {}
+
     url = 'https://access-alexa-na.amazon.com/v1/avs/speechrecognizer/recognize'
     token = gettoken()
     headers = {'Authorization' : 'Bearer %s' % token}
@@ -188,6 +190,7 @@ def alexa_query(recording,response,http_log_fn):
                                 sys.stderr.write('%.1f: http: %s %s'%(time.time(),directive['name'],desc,)+'\n')
                             else:
                                 sys.stderr.write('%.1f: http: %s'%(time.time(),directive['name'],)+'\n')
+                            directives[directive['name']] = directive
                     except:
                         logging.exception("Exception")
                         hlog.log('dump of part-json',payload=payload)
@@ -202,8 +205,9 @@ def alexa_query(recording,response,http_log_fn):
         else:
             pprint.pprint(r,hlog._log_file)
 
-
     hlog.stop()
+
+    return directives
 
 
 # Emacs:

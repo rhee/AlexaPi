@@ -1,5 +1,6 @@
 #! /usr/bin/env python
 import os,sys,time,logging
+import yaml
 
 import signal
 from snowboy import snowboydecoder
@@ -66,13 +67,16 @@ def unmute(): os.system('amixer -q set Master unmute 45%; amixer -q set Front un
 
 
 def handle():
+
+    directives = {}
+
     if os.path.exists(raw_recording):
 
         logging.info('start alexa()')
 
         play_music(sound_chime2,1000)
 
-        alexa_query(raw_recording, mp3_response, http_log)
+        directives = alexa_query(raw_recording, mp3_response, http_log)
 
         if os.path.exists(mp3_response):
             play_music(mp3_response,60000)
@@ -94,16 +98,23 @@ def handle():
     else:
         play_music(sound_chime3,2000)
 
+    return directives
+
 def start2():
     while True:
         play_music(sound_chime1,2000)
         time.sleep(1.5)
         record_to_file(raw_recording)
-        handle()
+        directives = handle()
 
 def handle_snowboy():
-    record_to_file(raw_recording, wait=False)
-    handle()
+    while True:
+        record_to_file(raw_recording, wait=False)
+        directives = handle()
+        if len(directives) > 0 and not 'listen' in directives:
+            break
+    print('directives')
+    yaml.safe_dump(directives,sys.stdout,default_flow_style=False)
     print('Snowboy Listening... Press Ctrl+C to exit')
 
 
