@@ -2,8 +2,8 @@
 import os,sys,time
 import pygame
 
-EXTERNAL_MP3_PLAYER=None
-#EXTERNAL_MP3_PLAYER="mpg123 -q -m -r 24000"
+#EXTERNAL_MP3_PLAYER=None
+EXTERNAL_MP3_PLAYER="mpg123 -q -m -r 24000"
 
 #pygame.mixer.init(frequency=24000,size=-16,channels=1)
 pygame.mixer.init(frequency=24000,size=-16,channels=1,buffer=720)

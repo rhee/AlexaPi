@@ -182,8 +182,12 @@ def alexa_query(recording,response,http_log_fn):
                     payload = json.loads(part.content)
                     hlog.log('part-json',length=len(part.content),payload=payload)
                     try:
-                        desc=payload['messageBody']['directives'][0]['payload']['audioContent']
-                        sys.stderr.write('%.1f: http: %s'%(time.time(),desc,)+'\n')
+                        for directive in payload['messageBody']['directives']:
+                            if directive['name'] == 'speak':
+                                desc=directive['payload']['audioContent']
+                                sys.stderr.write('%.1f: http: %s %s'%(time.time(),directive['name'],desc,)+'\n')
+                            else:
+                                sys.stderr.write('%.1f: http: %s'%(time.time(),directive['name'],)+'\n')
                     except:
                         logging.exception("Exception")
                         hlog.log('dump of part-json',payload=payload)
