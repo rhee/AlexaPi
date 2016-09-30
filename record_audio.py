@@ -36,16 +36,16 @@ THRESHOLD_MARGIN = 819  # 1638 ~ 32768 * 0.05, 819 ~ 32768 * 0.025
 
 
 
-# class color:
-#     black   = '\033[1;37;40m'
-#     red     = '\033[1;37;41m'
-#     green   = '\033[1;37;42m'
-#     yellow  = '\033[1;37;43m'
-#     blue    = '\033[1;37;44m'
-#     magenta = '\033[1;37;45m'
-#     cyan    = '\033[1;37;46m'
-#     white   = '\033[1;37;47m'
-#     nocolor = '\033[0m'
+class color:
+    black   = '\033[1;37;40m'
+    red     = '\033[1;37;41m'
+    green   = '\033[1;37;42m'
+    yellow  = '\033[1;37;43m'
+    blue    = '\033[1;37;44m'
+    magenta = '\033[1;37;45m'
+    cyan    = '\033[1;37;46m'
+    white   = '\033[1;37;47m'
+    nocolor = '\033[0m'
 
 
 #range0  = color.white
@@ -62,7 +62,13 @@ nocolor = '\033[0m'
 
 
 
-def print_vumeter(fmin,fmax,fthr):
+def print_vumeter(rec_on, fmin,fmax,fthr,msg=''):
+
+    if rec_on:
+        rec_state = color.black + ' ' + color.nocolor
+    else:
+        rec_state = color.red + ' ' + color.nocolor
+
     pscl = 2.5
     lmin = int(math.floor(pscl*math.log(fmin+1)))
     lmax = int(math.ceil(pscl*math.log(fmax+1)))
@@ -85,14 +91,14 @@ def print_vumeter(fmin,fmax,fthr):
         if lmax - lthr > 0: s = s + range2 + '>' * ( lmax - lthr )
         if lwid - lmax > 0: s = s + range3 + ' ' * ( lwid - lmax )
     s = s + nocolor
-    sys.stderr.write('[ %s ] %6d %6d' % ( s, fmin, fthr, ) + '\r')
+    sys.stderr.write('%s [ %s ] %6d %6d %s' % ( rec_state, s, fmin, fthr, msg, ) + '\r')
 
 
 
 
-__current_rms = THRESHOLD_INITIAL_BASE
-__current_rms_max = __current_rms_min = __current_rms
-__current_threshold = __current_rms + THRESHOLD_MARGIN
+__rms = THRESHOLD_INITIAL_BASE
+__rms_max = __rms_min = __rms
+__threshold = __rms + THRESHOLD_MARGIN
 __display_time = time.time()
 __display_dirty = False
 
@@ -100,26 +106,26 @@ __display_dirty = False
 def adjust_threshold(rec_blocks):
     "update threshold"
 
-    global __display_time,__current_threshold,__current_rms_max,__current_rms_min,__display_dirty
+    global __display_time,__threshold,__rms_max,__rms_min,__display_dirty
 
     # adjust current threshold. to follow-up th_target, within 3000 chunks, ( 30s )
-    th_target = __current_rms + THRESHOLD_MARGIN
-    th_delta = th_target - __current_threshold
+    th_target = __rms + THRESHOLD_MARGIN
+    th_delta = th_target - __threshold
 
-    __current_threshold += th_delta / 100.0 / 30.0
-    __current_rms_max = max(__current_rms_max,__current_rms)
-    __current_rms_min = min(__current_rms_min,__current_rms)
+    __threshold += th_delta / 100.0 / 30.0
+    __rms_max = max(__rms_max,__rms)
+    __rms_min = min(__rms_min,__rms)
 
     # show status at interval 1s
     t_now = time.time()
 
     if t_now >= __display_time + 0.5:
         if 0 == rec_blocks:
-            print_vumeter(__current_rms_min,__current_rms_max,__current_threshold)
+            print_vumeter(False, __rms_min,__rms_max,__threshold)
         else:
-            sys.stderr.write('%.1f: recording: %5.1f %5.1f' % ( t_now, min(0,rec_blocks/1000.0-1.0), rec_blocks/100.0, ) + '\r')
+            print_vumeter(True, __rms_min,__rms_max,__threshold, ('recording: %5.1f %5.1f' % ( min(0,rec_blocks/1000.0-1.0), rec_blocks/100.0,)))
         __display_time = t_now
-        __current_rms_max = __current_rms_min = __current_rms
+        __rms_max = __rms_min = __rms
         __display_dirty = True
 
 
@@ -130,13 +136,13 @@ def adjust_threshold(rec_blocks):
 def is_silent(snd_blocks,snd_chunk):
     "Returns 'True' if below the 'silent' threshold"
 
-    global __current_rms
+    global __rms
 
-    __current_rms = current = audioop.rms(snd_chunk,2)
+    __rms = current = audioop.rms(snd_chunk,2)
     #v = _detector.activations(np.array(snd_chunk))
     #sys.stderr.write('%.1f: vad activations: %.1f'%(time.time(),v,)+'\n')
 
-    res = current < __current_threshold
+    res = current < __threshold
 
     adjust_threshold(snd_blocks)
 
@@ -159,7 +165,7 @@ def trim(snd_chunk):
         r = array('h')
 
         for i in snd_chunk:
-            if not snd_started and abs(i)>__current_threshold:
+            if not snd_started and abs(i)>__threshold:
                 snd_started = True
                 r.append(i)
 
@@ -219,7 +225,7 @@ def record(wait):
         t_now = time.time()
 
         # little endian, signed short
-        snd_chunk = array('h', stream.read(CHUNK_SAMPLES))
+        snd_chunk = array('h', stream.read(CHUNK_SAMPLES, exception_on_overflow=False))
 
         if byteorder == 'big':
             snd_chunk.byteswap()
@@ -298,7 +304,7 @@ def record_to_file(path, wait=True):
 
     # recording cancelled?
     if len(data) == 0:
-        return
+        return False
 
     # pack as byte array
     data = pack('<' + ('h'*len(data)), *data)
@@ -309,6 +315,9 @@ def record_to_file(path, wait=True):
     f = open(path,'wb')
     f.write(data)
     f.close()
+
+    return True
+
 
 # Emacs:
 # mode: javascript

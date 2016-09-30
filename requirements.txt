@@ -5,4 +5,4 @@ wsgiref>=0.1.2
 CherryPy>=4.0.0
 requests-toolbelt
 pyaudio
-pygame
+hg+http://bitbucket.org/pygame/pygame

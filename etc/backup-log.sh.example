@@ -1,5 +1,0 @@
-#!/bin/sh
-rm -fv /tmp/alexa-pi/*.bak
-rsync -rt -v -P --rsync-path=./rsync \
-  /dev/shm/alexa-pi/ \
-  remotehost:/remote/path/to/copy/$(date +%s)/

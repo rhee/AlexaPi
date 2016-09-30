@@ -55,7 +55,7 @@ def play_music(fn,timeout_millis=-1):
         sys.stderr.write(('%.1f: '%(time.time(),))+(msg % args)+'\n')
 
     if EXTERNAL_MP3_PLAYER:
-        os.system('%s %s'%(EXTERNAL_MP3_PLAYER,fn))
+        os.system('%s %s &'%(EXTERNAL_MP3_PLAYER,fn))
     else:
         clock = pygame.time.Clock()
         tstart = pygame.time.get_ticks()

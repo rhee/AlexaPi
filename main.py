@@ -1,6 +1,6 @@
 #! /usr/bin/env python
 import os,sys,time,logging
-import yaml
+#import yaml
 
 import signal
 from snowboy import snowboydecoder
@@ -41,13 +41,8 @@ try: os.makedirs(os.path.join(alexa_tmp,'bak'))
 except: pass
 
 raw_recording = os.path.join(alexa_tmp,'recording.raw')
-raw_recording_bak = os.path.join(alexa_tmp,'bak/recording.raw')
 mp3_response = os.path.join(alexa_tmp,'response.mp3')
-mp3_response_bak = os.path.join(alexa_tmp,'bak/response.mp3')
 http_log = os.path.join(alexa_tmp,'http.log')
-http_log_bak = os.path.join(alexa_tmp,'bak/http.log')
-
-
 
 
 if sys.platform.startswith('linux'):
@@ -60,67 +55,39 @@ if sys.platform.startswith('linux'):
     asound.snd_lib_error_set_handler(c_error_handler)
 
 
+#def mute(): os.system('amixer -q set Master mute')
+#def unmute(): os.system('amixer -q set Master unmute 45%; amixer -q set Front unmute; amixer -q set Headphone unmute')
 
-
-def mute(): os.system('amixer -q set Master mute')
-def unmute(): os.system('amixer -q set Master unmute 45%; amixer -q set Front unmute; amixer -q set Headphone unmute')
-
+def ding(): snowboydecoder.play_audio_file(snowboydecoder.DETECT_DING)
 
 def handle():
-
-    directives = {}
-
-    if os.path.exists(raw_recording):
-
-        logging.info('start alexa()')
-
-        play_music(sound_chime2,1000)
-
-        directives = alexa_query(raw_recording, mp3_response, http_log)
-
-        if os.path.exists(mp3_response):
-            play_music(mp3_response,60000)
-        else:
-            play_music(sound_chime3,2000)
-
-        try: os.rename(raw_recording,raw_recording_bak)
-        except: pass
-        try: os.rename(mp3_response,mp3_response_bak)
-        except: pass
-        try: os.rename(http_log,http_log_bak)
-        except: pass
-
-        if os.path.exists('etc/backup-log.sh'):
-            try: os.system('env ALEXA_TMP='+alexa_tmp+' sh etc/backup-log.sh')
-            except: pass
-
-        logging.info('finished alexa()')
-    else:
-        play_music(sound_chime3,2000)
-
+    directives = alexa_query(raw_recording, mp3_response, http_log)
+    if 'speak' in directives:
+        play_music(mp3_response,60000)
     return directives
 
 def start2():
     while True:
-        play_music(sound_chime1,2000)
-        time.sleep(1.5)
-        record_to_file(raw_recording)
-        directives = handle()
+        ding()
+        if record_to_file(raw_recording):
+            directives = handle()
 
 def handle_snowboy():
+    wait = False
     while True:
-        record_to_file(raw_recording, wait=False)
-        directives = handle()
-        if len(directives) > 0 and not 'listen' in directives:
-            break
-    print('directives')
-    yaml.safe_dump(directives,sys.stdout,default_flow_style=False)
+        ding()
+        if record_to_file(raw_recording, wait=wait):
+            directives = handle()
+            if len(directives) > 0 and not 'listen' in directives:
+                break
+            wait = True
+    print('directives:', directives.keys())
     print('Snowboy Listening... Press Ctrl+C to exit')
-
+    ding()
 
 if __name__ == "__main__":
 
-    while internet_on() == False:
+    while not internet_on():
         sys.stderr.write('.')
 
     #start2()
@@ -128,6 +95,7 @@ if __name__ == "__main__":
     model = 'pmdl/Alexa.pmdl'
     detector = snowboydecoder.HotwordDetector(model, sensitivity=0.5)
     print('Snowboy Listening... Press Ctrl+C to exit')
+    ding()
 
     # main loop
     detector.start(detected_callback=handle_snowboy, #snowboydecoder.play_audio_file,
