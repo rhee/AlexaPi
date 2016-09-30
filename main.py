@@ -93,7 +93,8 @@ if __name__ == "__main__":
     #start2()
 
     model = 'pmdl/Alexa.pmdl'
-    detector = snowboydecoder.HotwordDetector(model, sensitivity=0.5)
+    sensitivity = 0.35
+    detector = snowboydecoder.HotwordDetector(model, sensitivity=sensitivity)
     print('Snowboy Listening... Press Ctrl+C to exit')
     ding()
 
