@@ -120,7 +120,7 @@ def internet_on():
         logging.exception("Exception")
         return False
 
-def alexa_query(recording,response,http_log_fn):
+def alexa_query(raw,response,http_log_fn):
     """
     recording: recorded raw file from mic
     response: path where response mp3 from alexa server stored
@@ -154,56 +154,56 @@ def alexa_query(recording,response,http_log_fn):
            "format": "audio/L16; rate=16000; channels=1"
        }
     }
-    with open(recording,'rb') as inf:
-        files = [
-                ('file', ('request', json.dumps(d), 'application/json; charset=UTF-8')),
-                ('file', ('audio', inf, 'audio/L16; rate=16000; channels=1'))
-                ]
 
-        hlog.log('alexa_query:request',url=url,headers=headers,request=d)
+    files = [
+            ('file', ('request', json.dumps(d), 'application/json; charset=UTF-8')),
+            ('file', ('audio', raw, 'audio/L16; rate=16000; channels=1'))
+            ]
 
-        r = requests.post(url, headers=headers, files=files)
+    hlog.log('alexa_query:request',url=url,headers=headers,request=d)
 
-        hlog.log('alexa_query:response:status',status=r.status_code)
+    r = requests.post(url, headers=headers, files=files)
 
-        sys.stderr.write('%.1f: http: status: %d'%(time.time(),r.status_code,)+'\n')
+    hlog.log('alexa_query:response:status',status=r.status_code)
 
-        if r.status_code == 200:
+    sys.stderr.write('%.1f: http: status: %d'%(time.time(),r.status_code,)+'\n')
 
-            ### CaseInsensitiveDict 를 yaml.safe_dump 할 수 없어서
-            ### .items() 를 가지고 새로 dict() 만든다
-            hlog.log('alexa_query:response:headers',headers=dict(r.headers.items()))
+    if r.status_code == 200:
 
-            multipart_data = decoder.MultipartDecoder.from_response(r)
+        ### CaseInsensitiveDict 를 yaml.safe_dump 할 수 없어서
+        ### .items() 를 가지고 새로 dict() 만든다
+        hlog.log('alexa_query:response:headers',headers=dict(r.headers.items()))
 
-            for part in multipart_data.parts:
-                hlog.log('part-header',headers=dict(part.headers.items()))
-                # Content-Type: application/json
-                # Content-Type: audio/mpeg
-                if part.headers['content-type'] == 'application/json':
-                    payload = json.loads(part.content)
-                    hlog.log('part-json',length=len(part.content),payload=payload)
-                    try:
-                        for directive in payload['messageBody']['directives']:
-                            if directive['name'] == 'speak':
-                                desc=directive['payload']['audioContent']
-                                sys.stderr.write('%.1f: http: %s %s'%(time.time(),directive['name'],desc,)+'\n')
-                            else:
-                                sys.stderr.write('%.1f: http: %s'%(time.time(),directive['name'],)+'\n')
-                            directives[directive['name']] = directive
-                    except:
-                        logging.exception("Exception")
-                        hlog.log('dump of part-json',payload=payload)
-                if part.headers['content-type'].startswith('audio/'):
-                    hlog.log('part-audio',length=len(part.content))
-                    audio = part.content
-                    try:
-                        with open(response, 'wb') as f: f.write(audio)
-                    except:
-                        logging.exception("Exception")
+        multipart_data = decoder.MultipartDecoder.from_response(r)
 
-        else:
-            pprint.pprint(r,hlog._log_file)
+        for part in multipart_data.parts:
+            hlog.log('part-header',headers=dict(part.headers.items()))
+            # Content-Type: application/json
+            # Content-Type: audio/mpeg
+            if part.headers['content-type'] == 'application/json':
+                payload = json.loads(part.content)
+                hlog.log('part-json',length=len(part.content),payload=payload)
+                try:
+                    for directive in payload['messageBody']['directives']:
+                        if directive['name'] == 'speak':
+                            desc=directive['payload']['audioContent']
+                            sys.stderr.write('%.1f: http: %s %s'%(time.time(),directive['name'],desc,)+'\n')
+                        else:
+                            sys.stderr.write('%.1f: http: %s'%(time.time(),directive['name'],)+'\n')
+                        directives[directive['name']] = directive
+                except:
+                    logging.exception("Exception")
+                    hlog.log('dump of part-json',payload=payload)
+            if part.headers['content-type'].startswith('audio/'):
+                hlog.log('part-audio',length=len(part.content))
+                audio = part.content
+                try:
+                    with open(response, 'wb') as f: f.write(audio)
+                except:
+                    logging.exception("Exception")
+
+    else:
+        pprint.pprint(r,hlog._log_file)
 
     hlog.stop()
 

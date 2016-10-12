@@ -3,7 +3,7 @@ import os,sys,time
 import pygame
 
 #EXTERNAL_MP3_PLAYER=None
-EXTERNAL_MP3_PLAYER="mpg123 -q -m -r 24000"
+EXTERNAL_MP3_PLAYER="mpg123 -q -m -r 24000 %s" # "&"
 
 #pygame.mixer.init(frequency=24000,size=-16,channels=1)
 pygame.mixer.init(frequency=24000,size=-16,channels=1,buffer=720)
@@ -55,7 +55,7 @@ def play_music(fn,timeout_millis=-1):
         sys.stderr.write(('%.1f: '%(time.time(),))+(msg % args)+'\n')
 
     if EXTERNAL_MP3_PLAYER:
-        os.system('%s %s &'%(EXTERNAL_MP3_PLAYER,fn))
+        os.system(EXTERNAL_MP3_PLAYER % (fn,))
     else:
         clock = pygame.time.Clock()
         tstart = pygame.time.get_ticks()

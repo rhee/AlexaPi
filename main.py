@@ -18,19 +18,15 @@ def interrupt_callback():
 # capture SIGINT signal, e.g., Ctrl+C
 signal.signal(signal.SIGINT, signal_handler)
 
-#import play_audio
-#import record_audio
-#import alexa_query
-
 from play_audio import play_music
 from record_audio import record_to_file
 from alexa_query import internet_on,alexa_query
 
 path = os.path.realpath(__file__).rstrip(os.path.basename(__file__))
 
-sound_chime1 = os.path.join(path,'sounds/chime1.mp3') # listening
-sound_chime2 = os.path.join(path,'sounds/chime2.mp3') # querying
-sound_chime3 = os.path.join(path,'sounds/chime3.mp3') # something wrong
+# sound_chime1 = os.path.join(path,'sounds/chime1.mp3') # listening
+# sound_chime2 = os.path.join(path,'sounds/chime2.mp3') # querying
+# sound_chime3 = os.path.join(path,'sounds/chime3.mp3') # something wrong
 
 alexa_tmp = '/tmp/alexa-pi'
 
@@ -54,17 +50,17 @@ if sys.platform.startswith('linux'):
     asound = cdll.LoadLibrary('libasound.so')
     asound.snd_lib_error_set_handler(c_error_handler)
 
-
 #def mute(): os.system('amixer -q set Master mute')
 #def unmute(): os.system('amixer -q set Master unmute 45%; amixer -q set Front unmute; amixer -q set Headphone unmute')
 
 def ding(): snowboydecoder.play_audio_file(snowboydecoder.DETECT_DING)
 
 def handle():
-    directives = alexa_query(raw_recording, mp3_response, http_log)
-    if 'speak' in directives:
-        play_music(mp3_response,60000)
-    return directives
+    with open(raw_recording,'rb') as raw:
+        directives = alexa_query(raw, mp3_response, http_log)
+        if 'speak' in directives:
+            play_music(mp3_response,60000)
+        return directives
 
 def start2():
     while True:
@@ -78,11 +74,11 @@ def handle_snowboy():
         ding()
         if record_to_file(raw_recording, wait=wait):
             directives = handle()
+            print('directives:', directives.keys())
             if len(directives) > 0 and not 'listen' in directives:
                 break
-            wait = True
-    print('directives:', directives.keys())
-    print('Snowboy Listening... Press Ctrl+C to exit')
+        wait = True
+    print('Snowboy Listening...')
     ding()
 
 if __name__ == "__main__":
@@ -93,13 +89,13 @@ if __name__ == "__main__":
     #start2()
 
     model = 'pmdl/Alexa.pmdl'
-    sensitivity = 0.35
+    sensitivity = 0.45
     detector = snowboydecoder.HotwordDetector(model, sensitivity=sensitivity)
-    print('Snowboy Listening... Press Ctrl+C to exit')
+    print('Snowboy Listening...')
     ding()
 
     # main loop
-    detector.start(detected_callback=handle_snowboy, #snowboydecoder.play_audio_file,
+    detector.start(detected_callback=handle_snowboy,
                    interrupt_check=interrupt_callback,
                    sleep_time=0.03)
 
