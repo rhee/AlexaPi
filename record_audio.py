@@ -1,5 +1,6 @@
 #
 import sys,time
+import types
 import math
 
 import pyaudio
@@ -147,7 +148,7 @@ class prowneddict(dict):
 
 class microphone:
 
-    def __init__(self):
+    def __init__(self, wait):
         self.rms = THRESHOLD_INITIAL_BASE
         self.rms_max = self.rms_min = self.rms
         self.threshold = self.rms + THRESHOLD_MARGIN
@@ -167,85 +168,97 @@ class microphone:
         st.num_chunks = 0
         st.recording = array('h')
         st.test_chunk = array('h') # chunk to analyze ( 2 * CHUNK_SAMPLES samples )
-        st.sampling_state = None
+        st.ratecv_state = None
         st.eof = False
 
-        def _read(self, n=-1):
+        def _read(self, numbytes=-1):
             # FIXME: nonlocal num_silent, num_noisy, num_chunks, recording, test_chunk
             
-            def _read_buf(st, n):
+            def _read_buf(st, numbytes):
                 # # pack as byte array
                 # this_chunk = pack('<' + ('h'*len(this_chunk)), *this_chunk)
-                if n < 0:
-                    n = len(st.recording)
-                result = array('h')
-                result.extend(st.recording[:n])
-                del st.recording[:n]
-                return pack('<' + ('h' * len(result)), *result)
+                if numbytes < 0:
+                    numbytes = len(st.recording)
+                numwords = numbytes / 2
+                result = array('h', st.recording[:numwords])
+                st.recording = st.recording[numwords:]
+                return pack('<' + ('h' * numwords), *result)
 
             if st.eof:
                 raise IOError('read() after EOF')
 
-            # little endian, signed short
-            this_chunk = array('h', stream.read(CHUNK_SAMPLES, exception_on_overflow=False))
+            while True:
+                
+                # little endian, signed short
+                this_chunk = array('h', stream.read(CHUNK_SAMPLES, exception_on_overflow=False))
 
-            if (len(this_chunk) == 0):
-                st.test_chunk = array('h') # empty test_chunk
-                return array('h') # no input
+                #sys.stderr.write('mic.read: got ' + str(len(this_chunk)) + ' samples' + '\n')
 
-            if byteorder == 'big':
-                this_chunk.byteswap()
+                if (len(this_chunk) == 0):
+                    st.test_chunk = array('h') # empty test_chunk
+                    sys.stderr.write('mic.read: return empty' + '\n')
+                    return array('h') # no input
 
-            st.test_chunk.extend(this_chunk)    # make test_chunk + this_chunk
-            silent = is_silent(st.test_chunk)
+                if byteorder == 'big':
+                    this_chunk.byteswap()
 
-            self.adjust_threshold()
-            self.update_status(st.num_chunks)
+                st.test_chunk.extend(this_chunk)    # make test_chunk + this_chunk
+                silent = self.is_silent(st.test_chunk)
 
-            if 0 == st.num_chunks: # check recording start condition
+                self.adjust_threshold()
+                self.update_status(st.num_chunks)
 
-                if wait and silent:
-                    st.num_noisy = 0
-                    st.recording = array('h') # truncate buffer
-                else:
-                    st.num_noisy += 1
-                    if st.num_noisy >= ABOVE_CHUNKS:
+                if 0 == st.num_chunks: # check recording start condition
+
+                    if wait and silent:
+                        st.num_noisy = 0
+                        st.recording = array('h') # truncate buffer
+                    else:
+                        st.num_noisy += 1
+                        if st.num_noisy >= ABOVE_CHUNKS:
+                            self.clear_status()
+                            st.num_chunks = 1
+
+                else: # check recording stop condition
+
+                    st.num_chunks += 1
+
+                    if st.num_chunks > MAX_CHUNKS + BELOW_CHUNKS: # ignore if the sample longer than 9.5s
                         self.clear_status()
-                        st.num_chunks = 1
+                        dur = ( st.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
+                        sys.stderr.write('%.1f: *** skip too long recording (%.1f)'%(time.time(),dur)+'\n')
+                        st.eof = True
+                        sys.stderr.write('mic.read: too-long: return empty' + '\n')
+                        return _read_buf(st, numbytes) # return samples read so far
 
-            else: # check recording stop condition
+                    if silent:
+                        st.num_silent += 1
+                        if st.num_silent >= BELOW_CHUNKS:
+                            self.clear_status()
+                            if st.num_chunks < MIN_CHUNKS: # too short
+                                dur = ( st.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
+                                sys.stderr.write('%.1f: *** skip too short recording (%.1f)'%(time.time(),dur)+'\n')
+                                st.eof = True
+                                sys.stderr.write('mic.read: short: return empty' + '\n')
+                            return _read_buf(st, numbytes) # return samples read so far
+                    else:
+                        st.num_silent = 0
 
-                st.num_chunks += 1
+                # prefare test_chunk for next iteration
+                st.test_chunk = array('h')
+                st.test_chunk.extend(this_chunk)
 
-                if st.num_chunks > MAX_CHUNKS + BELOW_CHUNKS: # ignore if the sample longer than 9.5s
-                    self.clear_status()
-                    dur = ( st.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
-                    sys.stderr.write('%.1f: *** skip too long recording (%.1f)'%(time.time(),dur)+'\n')
-                    st.eof = True
-                    return _read_buf(st, n) # return samples read so far
+                # sample rate convert 24000 -> 16000
+                new_chunk,st.ratecv_state = audioop.ratecv(this_chunk,2,CHANNELS,RATE,RATE_OUTPUT,st.ratecv_state)
 
-                if silent:
-                    st.num_silent += 1
-                    if st.num_silent >= BELOW_CHUNKS:
-                        self.clear_status()
-                        if st.num_chunks < MIN_CHUNKS: # too short
-                            dur = ( st.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
-                            sys.stderr.write('%.1f: *** skip too short recording (%.1f)'%(time.time(),dur)+'\n')
-                            st.eof = True
-                        return _read_buf(st, n) # return samples read so far
-                else:
-                    st.num_silent = 0
-
-            # prefare test_chunk for next iteration
-            st.test_chunk = array('h')
-            st.test_chunk.extend(this_chunk)
-
-            # sample rate convert 24000 -> 16000
-            this_chunk,st.sampling_state = audioop.ratecv(this_chunk,2,CHANNELS,RATE,RATE_OUTPUT,st.sampling_state)
-
-            st.recording.extend(this_chunk)
-            
-            return _read_buf(st, n)
+                st.recording.extend(array('h',new_chunk)) # NOTE: audioop.ratecv() returns (str,state)
+                
+                # enough?
+                if numbytes > -1 and 2 * len(st.recording) >= numbytes:
+                    break
+                
+            sys.stderr.write('mic.read: return response: ' + str(numbytes) + '\n')
+            return _read_buf(st, numbytes)
 
 
         def _close(self):
@@ -253,8 +266,9 @@ class microphone:
             stream.close()
             audio.terminate()
 
-        self.read = _read
-        self.close = _close
+
+        self.read = types.MethodType(_read, self) #_read
+        self.close = types.MethodType(_close, self) #_read
 
     # run for each chunk, ( 1/100s )
     def adjust_threshold(self):
@@ -299,126 +313,6 @@ class microphone:
 
     def write(str):
         raise IOError('write() not supported for microphone')
-
-
-    def record(self,wait):
-        """
-        Record a word or words from the microphone and
-        return the data as an array of signed shorts.
-
-        Normalizes the audio, trims silence from the
-        start and end, and pads with 0.5 seconds of
-        blank sound to make sure VLC et al can play
-        it without getting chopped off.
-        """
-
-        # clear dynamic threshold reference time
-
-        self.audio = pyaudio.PyAudio()
-        self.stream = self.audio.open(format=FORMAT, channels=CHANNELS, rate=RATE,
-                        input=True, output=True,
-                        frames_per_buffer=CHUNK_SAMPLES)
-
-        self.num_silent = 0
-        self.num_noisy = 0
-        self.num_chunks = 0
-
-        self.recording = array('h')
-        self.test_chunk = array('h') # chunk to analyze ( 2 * CHUNK_SAMPLES samples )
-
-        while 1:
-            
-            # little endian, signed short
-            this_chunk = array('h', self.stream.read(CHUNK_SAMPLES, exception_on_overflow=False))
-
-            if (len(this_chunk) == 0):
-                self.test_chunk = array('h') # empty test_chunk
-                continue
-
-            if byteorder == 'big':
-                this_chunk.byteswap()
-
-            self.test_chunk.extend(this_chunk)    # make test_chunk + this_chunk
-            silent = self.is_silent(self.test_chunk)
-
-            self.adjust_threshold()
-            self.update_status(self.num_chunks)
-
-            if 0 == self.num_chunks: # check recording start condition
-
-                if wait and silent:
-                    self.num_noisy = 0
-                    self.recording = array('h') # truncate buffer
-                else:
-                    self.num_noisy += 1
-                    if self.num_noisy >= ABOVE_CHUNKS:
-                        self.clear_status()
-                        self.num_chunks = 1
-
-            else: # check recording stop condition
-
-                self.num_chunks += 1
-
-                if self.num_chunks > MAX_CHUNKS + BELOW_CHUNKS: # ignore if the sample longer than 9.5s
-                    self.clear_status()
-                    dur = ( self.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
-                    sys.stderr.write('%.1f: *** skip too long recording (%.1f)'%(time.time(),dur)+'\n')
-                    self.recording = array('h') # clear
-                    break
-
-                if silent:
-                    self.num_silent += 1
-                    if self.num_silent >= BELOW_CHUNKS:
-                        self.clear_status()
-                        if self.num_chunks < MIN_CHUNKS: # too short
-                            dur = ( self.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
-                            sys.stderr.write('%.1f: *** skip too short recording (%.1f)'%(time.time(),dur)+'\n')
-                            self.recording = array('h') # clear
-
-                        break
-                else:
-                    self.num_silent = 0
-
-            self.recording.extend(this_chunk)
-
-            # prefare test_chunk for next iteration
-            self.test_chunk = array('h')
-            self.test_chunk.extend(this_chunk)
-
-        self.stream.stop_stream()
-        self.stream.close()
-
-        self.audio.terminate()
-
-        if len(self.recording) > 0:
-            self.recording = normalize(self.recording)
-            self.recording = trim(self.recording, self.threshold)
-            self.recording = add_silence(self.recording, 0.5)
-            
-            # pack as byte array
-            self.recording = pack('<' + ('h'*len(self.recording)), *self.recording)
-            # sample rate convert 24000 -> 16000
-            self.state = None
-            self.recording,self.state = audioop.ratecv(self.recording,2,CHANNELS,RATE,RATE_OUTPUT,self.state)
-
-        return self.recording
-
-
-def record_to_file(path, wait=True):
-    "Records from the microphone and outputs the resulting data to 'path'"
-    
-    mic = microphone()
-    data = mic.record(wait)
-
-    # recording cancelled?
-    if len(data) == 0:
-        return False
-
-    f = open(path,'wb')
-    f.write(data)
-    f.close()
-
-    return True
 
 
 # Emacs:

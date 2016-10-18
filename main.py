@@ -19,7 +19,7 @@ def interrupt_callback():
 signal.signal(signal.SIGINT, signal_handler)
 
 from play_audio import play_music
-from record_audio import record_to_file
+from record_audio import microphone
 from alexa_query import internet_on,alexa_query
 
 path = os.path.realpath(__file__).rstrip(os.path.basename(__file__))
@@ -68,7 +68,7 @@ def start2():
         if record_to_file(raw_recording):
             directives = handle()
 
-def handle_snowboy():
+def handle_snowboy_():
     wait = False
     while True:
         ding()
@@ -77,6 +77,21 @@ def handle_snowboy():
             print('directives:', directives.keys())
             if len(directives) > 0 and not 'listen' in directives:
                 break
+        wait = True
+    print('Snowboy Listening...')
+    ding()
+
+def handle_snowboy():
+    wait = False
+    while True:
+        ding()
+        mic = microphone(wait)
+        directives = alexa_query(mic, mp3_response, http_log)
+        if 'speak' in directives:
+            play_music(mp3_response,60000)
+        print('directives:', directives.keys())
+        if len(directives) > 0 and not 'listen' in directives:
+            break
         wait = True
     print('Snowboy Listening...')
     ding()
