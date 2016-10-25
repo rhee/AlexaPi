@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from traceback import print_exc
-import logging
+import sys,logging
 import json
 import re
 import requests
@@ -90,14 +90,14 @@ def busman_query(mic):
     # "entities" : { }
     # }
 
-    #sys.stderr.write('response: '+r.text.encode('utf-8')+'\n')
-    logging.info('response: '+r.text.encode('utf-8')+'\n')
+    sys.stderr.write('response: '+r.text.encode('utf-8')+'\n')
+    #logging.info('response: '+r.text.encode('utf-8')+'\n')
 
     resp = json.loads(r.text)
     get_bus_arrival(context, resp['_text'])
     
-    #sys.stderr.write('get_bus_arrival: '+json.dumps(context)+"\n")
-    logging.info('get_bus_arrival: '+json.dumps(context)+"\n")
+    sys.stderr.write('get_bus_arrival: '+json.dumps(context)+"\n")
+    #logging.info('get_bus_arrival: '+json.dumps(context)+"\n")
     
     sys.stdout.write(context['response'] + "\n")
     
