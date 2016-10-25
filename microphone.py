@@ -56,7 +56,7 @@ nocolor = '\033[0m'
 
 
 
-def print_vumeter(rec_on, fmin,fmax,fthr,msg=''):
+def print_vumeter(rec_on, fmin, fmax, fthr, rec_time):
 
     if rec_on:
         rec_state = color.black + ' ' + color.nocolor
@@ -85,7 +85,7 @@ def print_vumeter(rec_on, fmin,fmax,fthr,msg=''):
         if lmax - lthr > 0: s = s + range2 + '>' * ( lmax - lthr )
         if lwid - lmax > 0: s = s + range3 + ' ' * ( lwid - lmax )
     s = s + nocolor
-    sys.stderr.write('%s [ %s ] %6d %6d %s' % ( rec_state, s, fmin, fthr, msg, ) + '\r')
+    sys.stderr.write('%s [ %s ] %5d %5d %7.1f' % ( rec_state, s, fmin, fthr, rec_time, ) + '\r')
 
 def normalize(snd_chunk):
     "Average the volume out"
@@ -175,13 +175,12 @@ class microphone:
             # FIXME: nonlocal num_silent, num_noisy, num_chunks, recording, test_chunk
             
             def _read_buf(st, numbytes):
-                # # pack as byte array
-                # this_chunk = pack('<' + ('h'*len(this_chunk)), *this_chunk)
                 if numbytes < 0:
                     numbytes = len(st.recording)
                 numwords = numbytes / 2
                 result = array('h', st.recording[:numwords])
                 st.recording = st.recording[numwords:]
+                # # pack as byte array
                 return pack('<' + ('h' * numwords), *result)
 
             if st.eof:
@@ -191,8 +190,6 @@ class microphone:
                 
                 # little endian, signed short
                 this_chunk = array('h', stream.read(CHUNK_SAMPLES, exception_on_overflow=False))
-
-                #sys.stderr.write('mic.read: got ' + str(len(this_chunk)) + ' samples' + '\n')
 
                 if (len(this_chunk) == 0):
                     st.test_chunk = array('h') # empty test_chunk
@@ -216,7 +213,6 @@ class microphone:
                     else:
                         st.num_noisy += 1
                         if st.num_noisy >= ABOVE_CHUNKS:
-                            self.clear_status()
                             st.num_chunks = 1
 
                 else: # check recording stop condition
@@ -234,8 +230,8 @@ class microphone:
                     if silent:
                         st.num_silent += 1
                         if st.num_silent >= BELOW_CHUNKS:
-                            self.clear_status()
                             if st.num_chunks < MIN_CHUNKS: # too short
+                                self.clear_status()
                                 dur = ( st.num_chunks - BELOW_CHUNKS ) * CHUNK_SAMPLES / RATE
                                 sys.stderr.write('%.1f: *** skip too short recording (%.1f)'%(time.time(),dur)+'\n')
                                 st.eof = True
@@ -292,6 +288,7 @@ class microphone:
     def clear_status(self):
         if self.display_dirty: sys.stderr.write('\n')
         self.display_dirty = False
+        #logging.exception('clear_status')
 
 
     def update_status(self, num_chunks):
@@ -299,9 +296,19 @@ class microphone:
         t_now = time.time()
         if t_now >= self.display_time + 0.5:
             if 0 == num_chunks:
-                print_vumeter(False, self.rms_min,self.rms_max,self.threshold)
+                print_vumeter(
+                    False, 
+                    self.rms_min,
+                    self.rms_max,
+                    self.threshold,
+                    0.0)
             else:
-                print_vumeter(True, self.rms_min,self.rms_max,self.threshold, ('recording: %5.1f %5.1f' % ( min(0,num_chunks/1000.0-1.0), num_chunks/100.0,)))
+                print_vumeter(
+                    True, 
+                    self.rms_min,
+                    self.rms_max,
+                    self.threshold, 
+                    max(0, num_chunks/10.0-1.0))
             self.rms_max = self.rms_min = self.rms
             self.display_time = t_now
             self.display_dirty = True

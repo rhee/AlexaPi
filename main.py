@@ -19,7 +19,7 @@ def interrupt_callback():
 signal.signal(signal.SIGINT, signal_handler)
 
 from play_audio import play_music
-from record_audio import microphone
+from microphone import microphone
 from alexa_query import internet_on,alexa_query
 from busman import busman_query
 
@@ -74,7 +74,7 @@ def handle_alexa():
         if len(directives) > 0 and not 'listen' in directives:
             break
         wait = True
-    print('Snowboy Listening...')
+    print('[Snowboy Listening...]')
     ding()
 
 
@@ -88,7 +88,7 @@ def handle_okbus():
         if len(directives) > 0 and not 'listen' in directives:
             break
         wait = True
-    print('Snowboy Listening...')
+    print('[Snowboy Listening...]')
     ding()
 
 if __name__ == "__main__":
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     ]
 
     detector = snowboydecoder.HotwordDetector(models, sensitivity=sensitivity)
-    print('Snowboy Listening...')
+    print('[Snowboy Listening...]')
     ding()
 
     # main loop

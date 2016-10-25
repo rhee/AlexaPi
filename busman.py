@@ -8,6 +8,8 @@ import re
 import requests
 import pymysql as MySQLdb
 
+from subprocess import Popen, PIPE, call
+
 from creds import WIT_AI_TOKEN
 
 def lookup_bus_number(conn, context, query_text):
@@ -79,26 +81,19 @@ def busman_query(mic):
         }
     url = "https://api.wit.ai/speech?v=20160526"
     r = requests.post(
-        url, #url + '?' + urllib.urlencode(payload),
+        url,
         data = gen(),
         headers = headers)
 
-    # response example:
-    # {
-    # "msg_id" : "15cce324-4395-437a-ae1f-76b19666b2e4",
-    # "_text" : "360번 버스",
-    # "entities" : { }
-    # }
-
     sys.stderr.write('response: '+r.text.encode('utf-8')+'\n')
-    #logging.info('response: '+r.text.encode('utf-8')+'\n')
 
     resp = json.loads(r.text)
     get_bus_arrival(context, resp['_text'])
     
     sys.stderr.write('get_bus_arrival: '+json.dumps(context)+"\n")
-    #logging.info('get_bus_arrival: '+json.dumps(context)+"\n")
     
     sys.stdout.write(context['response'] + "\n")
+    call(["say",context['response']])
+    
     
     return { "response" : context['response'] }
