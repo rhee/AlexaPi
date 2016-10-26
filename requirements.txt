@@ -1,10 +1,9 @@
-Wave>=0.0.2
-requests-toolbelt
-requests>=2.4.3
-wsgiref>=0.1.2
-CherryPy>=4.0.0
-requests-toolbelt
 PyAudio>=0.2.9
-pygame>=1.9
+Pygame>=1.9
+Wave>=0.0.2
+requests>=2.4.3
+requests-toolbelt
 #hg+http://bitbucket.org/pygame/pygame
 PyMySQL
+wsgiref>=0.1.2
+CherryPy>=4.0.0
