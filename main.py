@@ -71,7 +71,8 @@ def handle_alexa():
         print('directives:', directives.keys())
         if 'speak' in directives:
             play_music(mp3_response,60000)
-        if len(directives) > 0 and not 'listen' in directives:
+        #if len(directives) > 0 and not 'listen' in directives:
+        if not 'listen' in directives:
             break
         wait = True
     print('[Snowboy Listening...]')
