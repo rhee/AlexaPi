@@ -1,5 +1,9 @@
 #! /usr/bin/env python
-import os,sys,time,logging
+from __future__ import print_function
+import logging
+logging.getLogger(__name__).setLevel(logging.INFO)
+
+import os,sys,time
 #import yaml
 
 import signal
@@ -63,19 +67,21 @@ def ding(): snowboydecoder.play_audio_file(snowboydecoder.DETECT_DING)
 #             directives = handle()
 
 def handle_alexa():
-    wait = False
+    wait = True #False
     while True:
         ding()
         mic = microphone(wait)
+        #logging.warn(('start microphone',wait))
+        #logging.warn(('end microphone',wait))
         directives = alexa_query(mic, mp3_response, http_log)
-        print('directives:', directives.keys())
+        logging.warn(('directives:', directives.keys()))
         if 'speak' in directives:
             play_music(mp3_response,60000)
         #if len(directives) > 0 and not 'listen' in directives:
         if not 'listen' in directives:
             break
         wait = True
-    print('[Snowboy Listening...]')
+    logging.warn(('[Snowboy Listening...]'))
     ding()
 
 
@@ -85,11 +91,11 @@ def handle_okbus():
         ding()
         mic = microphone(wait)
         directives = busman_query(mic)
-        print('directives:', directives.keys())
+        logging.warn(('directives:', directives.keys()))
         if len(directives) > 0 and not 'listen' in directives:
             break
         wait = True
-    print('[Snowboy Listening...]')
+    logging.warn(('[Snowboy Listening...]'))
     ding()
 
 if __name__ == "__main__":
@@ -101,21 +107,26 @@ if __name__ == "__main__":
 
     models = [
         'pmdl/Alexa.pmdl',
-        'pmdl/ok bus.pmdl'
+        # 'pmdl/ok bus.pmdl'
     ]
 
     sensitivity = [
         0.45,
-        0.45
+        # 0.45
     ]
 
     callbacks = [
         handle_alexa,
-        handle_okbus
+        # handle_okbus
     ]
 
+    # test
+    while True:
+        handle_alexa()
+        logging.warn(('handle_alexa finished'))
+
     detector = snowboydecoder.HotwordDetector(models, sensitivity=sensitivity)
-    print('[Snowboy Listening...]')
+    logging.warn(('[Snowboy Listening...]'))
     ding()
 
     # main loop

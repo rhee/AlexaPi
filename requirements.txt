@@ -7,3 +7,4 @@ requests-toolbelt
 PyMySQL
 wsgiref>=0.1.2
 CherryPy>=4.0.0
+PyYAML

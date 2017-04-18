@@ -1,4 +1,7 @@
 #
+import logging
+logging.getLogger(__name__).setLevel(logging.INFO)
+
 import sys,time
 import types
 import math
@@ -23,7 +26,7 @@ RATE_OUTPUT = 16000
 CHUNK_SAMPLES = 240     # 0.01s approx
 
 ABOVE_CHUNKS = 20      # 0.2s
-BELOW_CHUNKS = 150     # 1.5s
+BELOW_CHUNKS = 250     # 2.5s #150     # 1.5s
 
 MIN_CHUNKS = 150       # 1.5s
 MAX_CHUNKS = 950       # 9.5s
@@ -159,6 +162,8 @@ class microphone:
         stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE,
                         input=True, output=True,
                         frames_per_buffer=CHUNK_SAMPLES)
+
+        logging.warn(('PyAudio stream created'))
 
         # FIXME: nonlocal num_silent, num_noisy, num_chunks, recording, test_chunk
 
@@ -321,6 +326,12 @@ class microphone:
     def write(str):
         raise IOError('write() not supported for microphone')
 
+
+if __name__ == '__main__':
+    # from microphone import microphone
+    mic = microphone(wait=True)
+    with open('record.raw','wb') as f:
+        f.write(mic.read())
 
 # Emacs:
 # mode: javascript
